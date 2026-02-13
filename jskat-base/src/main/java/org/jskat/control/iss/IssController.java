@@ -36,6 +36,9 @@ public class IssController {
 
     private static final Logger log = LoggerFactory.getLogger(IssController.class);
 
+    // Hard-coded flag to enable AI player on ISS
+    private static final boolean USE_AI_PLAYER = true;
+
     private final JSkatResourceBundle strings = JSkatResourceBundle.INSTANCE;
     private final JSkatEventBus eventBus = JSkatEventBus.INSTANCE;
     private final JSkatApplicationData appData = JSkatApplicationData.INSTANCE;
@@ -50,6 +53,7 @@ public class IssController {
     private OutputChannel issOut;
 
     private final Map<String, SkatGameData> gameData;
+    private IssAIPlayerController aiPlayerController;
 
     /**
      * Constructor
@@ -127,6 +131,12 @@ public class IssController {
                 issOut = issConnector.getOutputChannel();
                 sendToIss(userName);
                 // sendToIss(issMsg.getLoginAndPasswordMessage(password));
+
+                // Initialize AI player controller if enabled
+                if (USE_AI_PLAYER) {
+                    aiPlayerController = new IssAIPlayerController(this, userName);
+                    log.info("AI player controller initialized");
+                }
             }
         }
     }
@@ -324,7 +334,13 @@ public class IssController {
      */
     public void updateISSGame(final String tableName, final GameStartInformation status) {
         eventBus.post(new IssTableGameStartedEvent(tableName, status));
-        gameData.put(tableName, createSkatGameData(status));
+        final SkatGameData newGameData = createSkatGameData(status);
+        gameData.put(tableName, newGameData);
+
+        // Initialize AI player for this table if enabled
+        if (USE_AI_PLAYER && aiPlayerController != null) {
+            aiPlayerController.initializeForTable(tableName, newGameData);
+        }
     }
 
     private static SkatGameData createSkatGameData(final GameStartInformation status) {
@@ -404,8 +420,15 @@ public class IssController {
                 eventBus.post(new SkatGameStateChangedEvent(tableName, GameState.PICKING_UP_SKAT));
             }
 
+        } else if (MoveType.PICK_UP_SKAT.equals(moveInformation.getType())) {
+            if (moveInformation.getSkat() != null && !moveInformation.getSkat().isEmpty() && currGame.getDeclarer() != null) {
+                eventBus.post(new ShowCardsCommand(tableName, currGame.getDeclarer(), currGame.getPlayerCards(currGame.getDeclarer())));
+            }
         } else if (MoveType.GAME_ANNOUNCEMENT.equals(moveInformation.getType())) {
             eventBus.post(new ActivePlayerChangedEvent(tableName, Player.FOREHAND));
+            if (currGame.getDeclarer() != null) {
+                eventBus.post(new ShowCardsCommand(tableName, currGame.getDeclarer(), currGame.getPlayerCards(currGame.getDeclarer())));
+            }
         } else if (MoveType.CARD_PLAY.equals(moveInformation.getType())) {
 
             // handle trick playing
@@ -425,6 +448,11 @@ public class IssController {
             } else if (trick.getFirstCard() != null) {
                 eventBus.post(new ActivePlayerChangedEvent(tableName, trick.getForeHand().getLeftNeighbor()));
             }
+        }
+
+        // Pass move to AI player controller if enabled
+        if (USE_AI_PLAYER && aiPlayerController != null) {
+            aiPlayerController.onMoveReceived(tableName, moveInformation, currGame);
         }
     }
 
@@ -451,6 +479,10 @@ public class IssController {
         switch (moveInformation.getType()) {
             case DEAL:
                 currGame.setGameState(GameState.DEALING);
+                for (final Player player : Player.values()) {
+                    currGame.addDealtCards(player, moveInformation.getCards(player));
+                }
+                currGame.setDealtSkatCards(moveInformation.getSkat());
                 break;
             case BID:
                 currGame.setGameState(GameState.BIDDING);
@@ -466,6 +498,15 @@ public class IssController {
                 break;
             case SKAT_REQUEST, PICK_UP_SKAT:
                 currGame.setGameState(GameState.DISCARDING);
+                if (moveInformation.getSkat() != null && !moveInformation.getSkat().isEmpty()) {
+                    currGame.setSkatCards(moveInformation.getSkat());
+                    if (currGame.getDeclarer() != null) {
+                        log.info("Adding skat {} to declarer {}", moveInformation.getSkat(), currGame.getDeclarer());
+                        currGame.addSkatToPlayer(currGame.getDeclarer());
+                    } else {
+                        log.warn("Declarer is null during PICK_UP_SKAT! Skat: {}", moveInformation.getSkat());
+                    }
+                }
                 break;
             case GAME_ANNOUNCEMENT:
                 currGame.setGameState(GameState.DECLARING);
@@ -516,6 +557,11 @@ public class IssController {
         eventBus.post(new TableGameMoveEvent(tableName, new GameFinishEvent(newGameData.getGameSummary())));
         eventBus.post(new ShowCardsCommand(tableName, newGameData.getCardsAfterDiscard(), newGameData.getSkat()));
         gameData.put(tableName, newGameData);
+
+        // Clean up AI player controller if enabled
+        if (USE_AI_PLAYER && aiPlayerController != null) {
+            aiPlayerController.onGameEnd();
+        }
     }
 
     /**
