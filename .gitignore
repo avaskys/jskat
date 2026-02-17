@@ -9,3 +9,6 @@
 
 # Downloaded ML models (from skat-ml-models releases)
 /.jskat/
+
+.DS_Store
+

@@ -13,8 +13,8 @@ import org.jskat.control.event.table.TableRemovedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Central event bus for JSkat.
@@ -27,7 +27,7 @@ public class JSkatEventBus {
 
     public final static JSkatEventBus INSTANCE = new JSkatEventBus();
     // TODO should be private
-    public final static Map<String, EventBus> TABLE_EVENT_BUSSES = new HashMap<>();
+    public final static Map<String, EventBus> TABLE_EVENT_BUSSES = new ConcurrentHashMap<>();
 
     private JSkatEventBus() {
         mainEventBus = new EventBus("JSkat");

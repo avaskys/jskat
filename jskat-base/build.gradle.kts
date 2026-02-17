@@ -23,6 +23,7 @@ val mlModelFiles = listOf(
     "bidding_transformer.onnx",
     "bidding_transformer.onnx.data",
     "card_play_transformer.onnx",
+    "card_play_transformer_pro.onnx",
     "game_eval_dense.onnx",
     "game_eval_dense.onnx.data",
     "game_eval_transformer.onnx",
@@ -63,4 +64,19 @@ tasks.register("downloadMlModels") {
 // Ensure models are downloaded before tests run
 tasks.named("test") {
     dependsOn("downloadMlModels")
+}
+
+// Task to run ML player comparison
+tasks.register<JavaExec>("compareMLPlayers") {
+    description = "Compares MLPlayer vs MLPlayerPro by replaying identical card distributions"
+    group = "verification"
+    mainClass.set("org.jskat.ai.ml.MLPlayerComparison")
+    classpath = sourceSets["main"].runtimeClasspath
+    dependsOn("downloadMlModels")
+
+    // Forward Ctrl-C to the JVM instead of Gradle killing the process
+    jvmArgs("-Xmx2g")
+    isIgnoreExitValue = true
+
+    // Pass command-line args: ./gradlew compareMLPlayers --args="24"
 }

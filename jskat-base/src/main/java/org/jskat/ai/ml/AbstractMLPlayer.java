@@ -33,13 +33,30 @@ public abstract class AbstractMLPlayer extends AbstractAIPlayer implements AutoC
     protected final Random random = new Random();
 
     /**
-     * Confidence threshold for bidding (only bid if win probability >= threshold)
+     * Confidence threshold for bidding (only bid if win probability >= threshold).
+     * Default 0.70; can be overridden per instance via {@link #setBidConfidenceThreshold}.
      */
-    protected static final float BID_CONFIDENCE_THRESHOLD = 0.70f;
+    protected float BID_CONFIDENCE_THRESHOLD = 0.70f;
+
+    /**
+     * Sets the bidding confidence threshold for this player instance.
+     */
+    public void setBidConfidenceThreshold(float threshold) {
+        this.BID_CONFIDENCE_THRESHOLD = threshold;
+    }
 
     // ONNX model wrappers
     protected ONNXModelWrapper biddingDenseModel;
     protected TransformerModelWrapper cardPlayTransformerModel;
+    protected TransformerModelWrapper defenderCardPlayTransformerModel;
+
+    /**
+     * Sets an optional separate card play transformer for defending (non-declarer) play.
+     * When set, this model is used instead of {@link #cardPlayTransformerModel} when defending.
+     */
+    public void setDefenderCardPlayModel(TransformerModelWrapper model) {
+        this.defenderCardPlayTransformerModel = model;
+    }
 
     // Cached decisions (since getCardsToDiscard and announceGame are called separately)
     protected CardList cachedDiscard;
@@ -108,6 +125,20 @@ public abstract class AbstractMLPlayer extends AbstractAIPlayer implements AutoC
         }
     }
 
+    /**
+     * Initializes with pre-created model instances (for sharing across players).
+     * Models are thread-safe — OrtSession supports concurrent run() calls.
+     * When sharing models, callers are responsible for closing them; this player's
+     * {@link #close()} will skip closing shared models.
+     */
+    protected void initializeSharedModels(ONNXModelWrapper biddingDense, TransformerModelWrapper cardPlayTransformer) {
+        this.biddingDenseModel = biddingDense;
+        this.cardPlayTransformerModel = cardPlayTransformer;
+        this.ownsSharedModels = false;
+    }
+
+    protected boolean ownsSharedModels = true;
+
     @Override
     public void prepareForNewGame() {
         mlMaxBidValue = 0;
@@ -123,11 +154,13 @@ public abstract class AbstractMLPlayer extends AbstractAIPlayer implements AutoC
 
     @Override
     public void close() {
-        if (biddingDenseModel != null) {
-            biddingDenseModel.close();
-        }
-        if (cardPlayTransformerModel != null) {
-            cardPlayTransformerModel.close();
+        if (ownsSharedModels) {
+            if (biddingDenseModel != null) {
+                biddingDenseModel.close();
+            }
+            if (cardPlayTransformerModel != null) {
+                cardPlayTransformerModel.close();
+            }
         }
     }
 
@@ -474,6 +507,12 @@ public abstract class AbstractMLPlayer extends AbstractAIPlayer implements AutoC
         Player me = knowledge.getPlayerPosition();
         Player left = me.getLeftNeighbor();
 
+        // Use defender model when available and not the declarer
+        TransformerModelWrapper model = cardPlayTransformerModel;
+        if (defenderCardPlayTransformerModel != null && knowledge.getDeclarer() != me) {
+            model = defenderCardPlayTransformerModel;
+        }
+
         int gameTypeIdx = MLFeatureExtractor.getGameTypeIndex(knowledge.getGameType());
 
         Player declarer = knowledge.getDeclarer();
@@ -546,7 +585,7 @@ public abstract class AbstractMLPlayer extends AbstractAIPlayer implements AutoC
             }
         }
 
-        return cardPlayTransformerModel.predict(
+        return model.predict(
                 gameTypeIdx,
                 declarerIdx,
                 isOuvert,

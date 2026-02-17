@@ -51,10 +51,24 @@ public class MLPlayer extends AbstractMLPlayer {
         }
     }
 
+    /**
+     * Creates a new ML Player with pre-created shared model instances.
+     * Models are thread-safe and will not be closed by this player.
+     */
+    public MLPlayer(ONNXModelWrapper biddingDense, ONNXModelWrapper gameEvalDense,
+                    TransformerModelWrapper cardPlayTransformer) {
+        setPlayerName("MLPlayer");
+        initializeSharedModels(biddingDense, cardPlayTransformer);
+        this.gameEvalDenseModel = gameEvalDense;
+        this.ownsGameEvalModel = false;
+    }
+
+    private boolean ownsGameEvalModel = true;
+
     @Override
     public void close() {
         super.close();
-        if (gameEvalDenseModel != null) {
+        if (ownsGameEvalModel && gameEvalDenseModel != null) {
             gameEvalDenseModel.close();
         }
     }

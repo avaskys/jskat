@@ -36,7 +36,7 @@ public class MLPlayerPro extends AbstractMLPlayer {
     public MLPlayerPro() {
         this(getDefaultModelPath("bidding_dense.onnx"),
              getDefaultModelPath("game_eval_transformer.onnx"),
-             getDefaultModelPath("card_play_transformer.onnx"),
+             getDefaultModelPath("card_play_transformer_pro.onnx"),
              getDefaultModelPath("bidding_transformer.onnx"));
     }
 
@@ -72,14 +72,31 @@ public class MLPlayerPro extends AbstractMLPlayer {
         logger.info("MLPlayerPro initialized (biddingTransformer={})", biddingTransformerModel != null);
     }
 
+    /**
+     * Creates a new ML Player Pro with pre-created shared model instances.
+     * Models are thread-safe and will not be closed by this player.
+     */
+    public MLPlayerPro(ONNXModelWrapper biddingDense, CardSetEvaluatorWrapper gameEvalTransformer,
+                       TransformerModelWrapper cardPlayTransformer, PreSkatTransformerWrapper biddingTransformer) {
+        setPlayerName("MLPlayerPro");
+        initializeSharedModels(biddingDense, cardPlayTransformer);
+        this.gameEvalTransformerModel = gameEvalTransformer;
+        this.biddingTransformerModel = biddingTransformer;
+        this.ownsProModels = false;
+    }
+
+    private boolean ownsProModels = true;
+
     @Override
     public void close() {
         super.close();
-        if (gameEvalTransformerModel != null) {
-            gameEvalTransformerModel.close();
-        }
-        if (biddingTransformerModel != null) {
-            biddingTransformerModel.close();
+        if (ownsProModels) {
+            if (gameEvalTransformerModel != null) {
+                gameEvalTransformerModel.close();
+            }
+            if (biddingTransformerModel != null) {
+                biddingTransformerModel.close();
+            }
         }
     }
 

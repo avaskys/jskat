@@ -1075,6 +1075,16 @@ public class SkatGame {
     }
 
     /**
+     * Gets the highest bid value for a player.
+     *
+     * @param player Player
+     * @return Highest bid value for the player (0 if player did not bid)
+     */
+    public int getMaxPlayerBid(Player player) {
+        return data.getMaxPlayerBid(player);
+    }
+
+    /**
      * Gets a summary of the game
      *
      * @return Game summary
