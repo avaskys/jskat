@@ -48,7 +48,7 @@ public class MLPlayerComparison {
      *   b.card-play      - Card play transformer path for P3-B
      *   b.card-play-def  - Defender card play transformer path (optional, overrides card-play when defending)
      *   b.game-eval      - Game eval model path for P3-B (pro only)
-     *   b.bidding        - Bidding model path for P3-B
+     *   b.bidding        - Bidding model path for P3-B ("dense" to skip bidding transformer for pro)
      *   b.bid-threshold  - Bidding confidence threshold for P3-B (default: 0.70)
      *   results          - CSV file for iterative result accumulation
      *   details          - Show per-game detail table (true/false, default: false)
@@ -759,7 +759,9 @@ public class MLPlayerComparison {
                     this.gameEvalDense = null;
                     this.gameEvalTransformer = new CardSetEvaluatorWrapper(ge);
                     PreSkatTransformerWrapper bt = null;
-                    try { bt = new PreSkatTransformerWrapper(bid); } catch (Exception ignored) {}
+                    if (!"dense".equals(config.bidding)) {
+                        try { bt = new PreSkatTransformerWrapper(bid); } catch (Exception ignored) {}
+                    }
                     this.biddingTransformer = bt;
                 } else {
                     String bd = config.bidding != null ? config.bidding : modelPath("bidding_dense.onnx");
